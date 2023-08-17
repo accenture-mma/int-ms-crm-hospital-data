@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:os="http://www.mulesoft.org/schema/mule/os"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+	
+	<flow name="int-ms-bed-data-flow" doc:id="e6177637-2cb3-4f0d-af90-ed3f1ae76c8b">
+		<scheduler doc:name="Scheduler" doc:id="e7b3d07a-ff83-4ab7-9ae2-9480dc3a4515" >
+			<scheduling-strategy >
+				<fixed-frequency frequency="2" timeUnit="MINUTES"/>
+			</scheduling-strategy>
+		</scheduler>
+		<os:retrieve doc:name="lastRetrievedAt" doc:id="0fd3ac9c-61bc-49b6-bf2a-39e745d83e7f" objectStore="Object_store" key="lastRetrievedAt_bed" target="lastRetrievedAt_bed">
+			<os:default-value ><![CDATA[#["2023-07-25T16:28:49.000Z"]]]></os:default-value>
+		</os:retrieve>
+		<ee:transform doc:name="bedQuery" doc:id="ed178576-1a3c-4ca9-bc4a-0a0a97f132c6" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="bedQuery" ><![CDATA[%dw 2.0
+output application/java
+---
+"SELECT Branch_Name__c,Hospital_Id__c, Hospital_Name__c,General_Beds_without_02_Available__c,General_beds_without_O2_occupied__c,General_Beds_with_02_Available__c,general_Beds_with_02_Occupied__c,ICU_Beds_Available__c,ICU_Beds_Occupied__c,LastModifiedDate,NICU_Beds_Available__c,NICU_Beds_Occupied__c,Ventilator_Beds_Available__c,Ventilator_beds_occupied__c FROM BedData__c WHERE LastModifiedDate >= " ++ vars.lastRetrievedAt_bed]]></ee:set-variable>
+			
+</ee:variables>
+		</ee:transform>
+		<salesforce:query doc:name="Fetch Bed Data" doc:id="e4d23547-43cf-4070-89a5-e0b012994f91" config-ref="Salesforce_Config">
+			<salesforce:salesforce-query ><![CDATA[#[vars.bedQuery]]]></salesforce:salesforce-query>
+		</salesforce:query>
+		<os:store doc:name="lastRetrievedAt" doc:id="4ba9af6c-fed5-4828-a3f9-4e07823b0371" objectStore="Object_store" key="lastRetrievedAt_bed">
+			<os:value><![CDATA[#[now()]]]></os:value>
+		</os:store>
+		<foreach doc:name="For Each" doc:id="cff2db76-71b2-457f-b6c2-fb2673123294" >
+			<ee:transform doc:name="payload" doc:id="65a2ad35-bda1-4c3f-b465-feec375901d9">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json 
+---
+[
+  {
+    "Hospital_Id": payload.Hospital_Id__c,
+    "Branch_Name": payload.Branch_Name__c,
+	"Hospital_Name": payload.Hospital_Name__c,
+	("General_Beds_without_02_Available": payload.General_Beds_without_02_Available__c as Number) if (payload.General_Beds_without_02_Available__c != null),
+	("General_beds_without_O2_occupied": payload.General_beds_without_O2_occupied__c as Number) if (payload.General_beds_without_O2_occupied__c != null),
+	("General_Beds_with_02_Available": payload.General_Beds_with_02_Available__c as Number) if (payload.General_Beds_with_02_Available__c != null),
+	("general_Beds_with_02_Occupied" : payload.general_Beds_with_02_Occupied__c as Number) if (payload.general_Beds_with_02_Occupied__c != null),
+	("ICU_Beds_Available": payload.ICU_Beds_Available__c as Number) if (payload.ICU_Beds_Available__c !=null),
+	("ICU_Beds_Occupied": payload.ICU_Beds_Occupied__c as Number) if (payload.ICU_Beds_Occupied__c !=null),
+	("NICU_Beds_Available": payload.NICU_Beds_Available__c as Number) if (payload.NICU_Beds_Available__c !=null),
+	("NICU_Beds_Occupied": payload.NICU_Beds_Occupied__c as Number) if (payload.NICU_Beds_Occupied__c !=null),
+	("Ventilator_Beds_Available": payload.Ventilator_Beds_Available__c as Number) if (payload.Ventilator_Beds_Available__c !=null),
+	("Ventilator_beds_occupied": payload.Ventilator_beds_occupied__c as Number) if(payload.Ventilator_beds_occupied__c !=null)
+  }
+]]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+			<logger level="INFO" doc:name="payload" doc:id="0bb6e187-3fc3-4bb2-9eb4-ffe5d86ad688" message="#[payload]" />
+			<http:request method="POST" doc:name="SystemAPIRequest" doc:id="f99397d5-e8ee-417c-8290-52b53fe1b320" config-ref="HTTP_Request_configuration" path="/updateBedData">
+			<http:headers><![CDATA[#[output application/java
+---
+{
+	"client_secret": p('secure::systemAPI.clientSecret'),
+	"client_id": p('secure::systemAPI.clientId')
+}]]]></http:headers>
+		</http:request>
+			<logger level="INFO" doc:name="payload" doc:id="8f0233db-f82e-4ea0-b0dc-c86be337635c" message="#[payload]"/>
+		</foreach>
+		<logger level="INFO" doc:name="Hospital data exhausted" doc:id="869b6f97-2108-4c6b-aa51-c37b47469af5" message="Bed data exhausted"/>
+	</flow>
+</mule>

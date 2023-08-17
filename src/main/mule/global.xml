@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:os="http://www.mulesoft.org/schema/mule/os"
+	xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd">
+	<salesforce:sfdc-config name="Salesforce_Config" doc:name="Salesforce Config" doc:id="54be55aa-92a8-403e-bb9c-9ef7f6791e34" >
+		<salesforce:basic-connection username="priyanka.a.kothari@force.com" password="${secure::salesforce.password}" securityToken="${secure::salesforce.token}"/>
+	</salesforce:sfdc-config>
+	<os:object-store name="Object_store" doc:name="Object store" doc:id="0b9c5eb2-8fac-49b4-986c-3d9226705411" maxEntries="5"/>
+<http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="32f0d37e-d073-451a-bd37-1343e3d51829" basePath="/api">
+		<http:request-connection host="s-ms-crm-hospital-data.us-e2.cloudhub.io" />
+	</http:request-config>
+	<configuration-properties doc:name="Configuration properties" doc:id="35b8649c-a77c-4f8e-937e-169aa3edad1e" file="properties/${mule.env}.yaml" />
+	<secure-properties:config name="Secure_Properties_Config" doc:name="Secure Properties Config" doc:id="54d36df8-f556-41a0-a161-82de8d362a6d" file="properties/${mule.env}.yaml" key="${mule.secureKey}" />
+</mule>

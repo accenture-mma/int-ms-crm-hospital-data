@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:os="http://www.mulesoft.org/schema/mule/os"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+	<flow name="int-ms-crmPharmacyDataFlow" doc:id="a2afbe48-45e6-4bb6-a3c4-9afe3e74c912">
+		<scheduler doc:name="Scheduler" doc:id="01f2d1a9-b161-4222-8aa7-2de74f1aa403" >
+			<scheduling-strategy >
+				<fixed-frequency frequency="2" timeUnit="MINUTES" />
+			</scheduling-strategy>
+		</scheduler>
+		<os:retrieve doc:name="lastRetrievedAt_Pharmacy" doc:id="1d9f03a7-a6c5-4d9a-980f-4e871b8bcc8b" key="lastRetrievedAt_Pharmacy" objectStore="Object_store" target="lastRetrievedAt_Pharmacy" >
+			<os:default-value ><![CDATA[#["2023-07-25T16:28:49.000Z"]]]></os:default-value>
+		</os:retrieve>
+		<ee:transform doc:name="pharmacyQuery" doc:id="4d7795f2-3b72-4c51-b5ec-94fcb02dfcb1" >
+			<ee:message />
+			<ee:variables >
+				<ee:set-variable variableName="pharmacyQuery" ><![CDATA[%dw 2.0
+output application/java
+---
+"SELECT City__c,Discount__c,Hospital_Id__c,Quantity__c,Hospital_Name__c,Branch_Name__c,Location__c,Medicine_Name__c,MRP__c,PharmacyId__c,Purchase_Date__c,Selling_Price__c,State__c,Vendor_Name__c,Total_Price__c FROM PharmacyData__c WHERE LastModifiedDate >= " ++ vars.lastRetrievedAt_Pharmacy]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<salesforce:query doc:name="pharmacyQuery" doc:id="e3c28adf-9b62-436a-87df-8cf4dce21036" config-ref="Salesforce_Config" >
+			<salesforce:salesforce-query ><![CDATA[#[vars.pharmacyQuery]]]></salesforce:salesforce-query>
+		</salesforce:query>
+		<os:store doc:name="lastRetrievedAt_Pharmacy" doc:id="eeb82fcf-5277-4264-97d4-1db0e7633a24" key="lastRetrievedAt_Pharmacy" objectStore="Object_store" >
+			<os:value ><![CDATA[#[now()]]]></os:value>
+		</os:store>
+		<foreach doc:name="For Each" doc:id="7ee7b2b7-7251-4811-a1d0-6344aa501e41" >
+			<ee:transform doc:name="payload" doc:id="6ef5261f-0a40-4428-a0ca-fe58714d10a3" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/json 
+---
+[
+  {
+    "hospital_id" : payload.Hospital_Id__c,
+	"hospital_name": payload.Hospital_Name__c,
+    "city": payload.City__c,
+    "location": payload.Location__c ,
+    "state": payload.State__c,
+    "pharmacy_Id": payload.PharmacyId__c,
+    "medicine_name": payload.Medicine_Name__c ,
+    ("discount": payload.Discount__c as Number) if(payload.Discount__c !=null),
+    "vendor_name": payload.Vendor_Name__c,
+	"branch_name": payload.Branch_Name__c,
+    ("MRP": payload.MRP__c as Number) if(payload.MRP__c !=null),
+	("quantity": payload.Quantity__c as Number) if(payload.Quantity__c !=null),
+	("total_price": payload.Total_Price__c as Number) if(payload.Total_Price__c !=null),
+    ("selling_price": payload.Selling_Price__c as Number) if(payload.Selling_Price__c !=null),
+	"purchase_date": payload.Purchase_Date__c as Date{format: "yyyy-MM-dd"} as String{format : "dd/MM/yyyy"}
+  }
+]]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			<logger level="INFO" doc:name="payload" doc:id="f5728085-fcd1-4019-a27e-8ad92d0bd46e" message="#[payload]" />
+			<http:request method="POST" doc:name="SystemAPIRequest" doc:id="613b38d1-e97f-4d2f-bdad-d4ce586f542c" config-ref="HTTP_Request_configuration" path="/createPharmacyData" >
+				<http:headers ><![CDATA[#[output application/java
+---
+{
+	"client_secret": p('secure::systemAPI.clientSecret'),
+	"client_id": p('secure::systemAPI.clientId')
+}]]]></http:headers>
+			</http:request>
+			<logger level="INFO" doc:name="SystemAPI response" doc:id="d8ee45c5-9e40-4d26-bb70-6476ac92a607" message="#[payload]" />
+		</foreach>
+		<logger level="INFO" doc:name="Pharmacy data exhausted" doc:id="62e4eb8f-657f-4849-a8ed-e53a5b8056c8" message="Pharmacy data exhausted" />
+	</flow>
+	</mule>

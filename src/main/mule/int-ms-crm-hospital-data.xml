@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:os="http://www.mulesoft.org/schema/mule/os"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+	<flow name="int-ms-crm-hospital-Flow" doc:id="11a237f0-e37e-4732-8668-3668571c182d">
+		<scheduler doc:name="Scheduler" doc:id="a01504f0-447e-43d2-889b-9ad37de964cf" >
+			<scheduling-strategy >
+				<fixed-frequency frequency="2" timeUnit="MINUTES"/>
+			</scheduling-strategy>
+		</scheduler>
+		<os:retrieve doc:name="lastRetrievedAt" doc:id="9404cf87-c676-43ce-b023-914aee06ec31" objectStore="Object_store" key="lastRetrievedAt_hospital" target="lastRetrievedAt_hospital">
+			<os:default-value ><![CDATA[#["2023-07-25T16:28:49.000Z"]]]></os:default-value>
+		</os:retrieve>
+		<ee:transform doc:name="hospQuery" doc:id="509bf15f-9a94-4cd6-bae3-daf1da6b4875" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="hospQuery" ><![CDATA[%dw 2.0
+output application/java
+---
+"SELECT Area__c,Branch_Name__c,City__c,Hospital_Id__c,hospital_Type__c,Name,State__c,totalGeneralBedswith02__c,totalGeneralBedswithoutO2__c,totalICUBeds__c,totalNICUBeds__c,totalVentilatorBeds__c FROM Hospital__c WHERE LastModifiedDate >= " ++ vars.lastRetrievedAt_hospital]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<salesforce:query doc:name="hospQuery" doc:id="7f516ef9-cf7c-471c-a1fa-af481cd7cc0f" config-ref="Salesforce_Config">
+			<salesforce:salesforce-query ><![CDATA[#[vars.hospQuery]]]></salesforce:salesforce-query>
+		</salesforce:query>
+		<os:store doc:name="lastRetrievedAt" doc:id="87b5aef4-89bd-4c73-8d8e-85baa3c64d8e" objectStore="Object_store" key="lastRetrievedAt_hospital">
+			<os:value><![CDATA[#[now()]]]></os:value>
+		</os:store>
+		<foreach doc:name="For Each" doc:id="a8832833-31b5-4ab6-a9f1-344d134e88f1" >
+			<ee:transform doc:name="payload" doc:id="431fe968-57d2-45f0-ac2b-2966185eaea2">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json 
+---
+[
+  {
+    "hospital_Id": payload.Hospital_Id__c,
+    "hospital_type": payload.hospital_Type__c ,
+    "hospital_name": payload.Name ,
+    "city": payload.City__c ,
+    "area": payload.Area__c ,
+    "state": payload.State__c ,
+    ("totalGeneralBedswith02": payload.totalGeneralBedswith02__c as Number) if (payload.totalGeneralBedswith02__c !=null),
+    ("totalGeneralBedswithoutO2": payload.totalGeneralBedswithoutO2__c as Number) if(payload.totalGeneralBedswithoutO2__c !=null),
+    ("totalICUBeds": payload.totalICUBeds__c as Number) if (payload.totalICUBeds__c !=null),
+    ("totalNICUBeds": payload.totalNICUBeds__c as Number) if (payload.totalNICUBeds__c !=null),
+    ("totalVentilatorBeds": payload.totalVentilatorBeds__c as Number) if(payload.totalVentilatorBeds__c !=null),
+	"Branch_Name": payload.Branch_Name__c
+  }
+]]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+			<logger level="INFO" doc:name="payload" doc:id="721c04a5-f930-438a-b105-78edfde6007e" message="#[payload]" />
+			<http:request method="POST" doc:name="SystemAPIRequest" doc:id="fc5ca42c-d14c-4802-ac1a-d49f412e48db" config-ref="HTTP_Request_configuration" path="/createHospitalData">
+			<http:headers><![CDATA[#[output application/java
+---
+{
+	"client_secret": p('secure::systemAPI.clientSecret'),
+	"client_id": p('secure::systemAPI.clientId')
+}]]]></http:headers>
+		</http:request>
+			<logger level="INFO" doc:name="payload" doc:id="cb75ccd6-2cd0-4d6b-b5ef-47b20a692ddd" message="#[payload]"/>
+		</foreach>
+		<logger level="INFO" doc:name="Hospital data exhausted" doc:id="c0433ac4-7f3a-4672-944b-3b16de87c20c" message="Hospital data exhausted"/>
+	</flow>
+</mule>

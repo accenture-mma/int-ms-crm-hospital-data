@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:os="http://www.mulesoft.org/schema/mule/os"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+	<flow name="int-ms-crm-docFlow" doc:id="3060b965-a9fb-4fc5-ae54-d5f7d17bec55">
+		<scheduler doc:name="Scheduler" doc:id="a91f2471-d412-4112-b698-50c1c12a4368" >
+			<scheduling-strategy >
+				<fixed-frequency frequency="2" timeUnit="MINUTES"/>
+			</scheduling-strategy>
+		</scheduler>
+		<os:retrieve doc:name="lastRetrievedAt" doc:id="2e28c6ee-e5f7-46cb-98ac-5ff2d5a45b8f" objectStore="Object_store" key="lastRetrievedAt_doctor" target="lastRetrievedAt_doctor">
+			<os:default-value ><![CDATA[#["2023-07-25T16:28:49.000Z"]]]></os:default-value>
+		</os:retrieve>
+		<ee:transform doc:name="docQuery" doc:id="f763cacb-1332-4d64-a37f-4163986af020" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="docQuery" ><![CDATA[%dw 2.0
+output application/java
+---
+"SELECT Hospital_Id__c,Doctor_Id__c,Hospital_Name__c,Branch_Name__c,Name, Availability__c,Gender__c,In_Time__c,Out_Time__c,Specialization__c FROM DoctorData__c WHERE LastModifiedDate >= " ++ vars.lastRetrievedAt_doctor]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<salesforce:query doc:name="docQuery" doc:id="bf620433-e35f-45d7-bd85-6a3ae198bb1a" config-ref="Salesforce_Config">
+			<salesforce:salesforce-query ><![CDATA[#[vars.docQuery]]]></salesforce:salesforce-query>
+		</salesforce:query>
+		<os:store doc:name="lastRetrievedAt" doc:id="54ebfebf-6190-4185-820e-c87c23ee5f35" objectStore="Object_store" key="lastRetrievedAt_doctor">
+			<os:value><![CDATA[#[now()]]]></os:value>
+		</os:store>
+		<foreach doc:name="For Each" doc:id="391e9e88-89e9-4c7f-97e6-5add667e728d" >
+			<ee:transform doc:name="payload" doc:id="417c4b63-5ad5-4ca9-923b-98195347e4dc">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json 
+---
+[
+  {
+    "hospital_Id": payload.Hospital_Id__c,
+    "hospital_name": payload.Hospital_Name__c ,
+    "doctor_name": payload.Name ,
+    "doctor_Id": payload.Doctor_Id__c,
+    "gender": payload.Gender__c ,
+    "availability": payload.Availability__c ,
+ 	 "In_Time": payload.In_Time__c,
+ 	 "Out_Time": payload.Out_Time__c,
+ 	 "Specialization": payload.Specialization__c,
+	"branch_name": payload.Branch_Name__c
+  }
+]]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+			<logger level="INFO" doc:name="payload" doc:id="ec587661-1bdd-4ae0-a51a-03a342b22066" message="#[payload]" />
+			<http:request method="POST" doc:name="SystemAPIRequest" doc:id="631d726e-d335-4e6c-8f75-fa810edfea18" config-ref="HTTP_Request_configuration" path="/createDoctorData">
+			<http:headers><![CDATA[#[output application/java
+---
+{
+	"client_secret": p('secure::systemAPI.clientSecret'),
+	"client_id": p('secure::systemAPI.clientId')
+}]]]></http:headers>
+		</http:request>
+			<logger level="INFO" doc:name="payload" doc:id="3efb5ced-91e4-45f7-9280-2d1c54aa90ac" message="#[payload]"/>
+		</foreach>
+		<logger level="INFO" doc:name="Doctor data exhausted" doc:id="80aaf765-49c7-4eda-a197-06a9b9eca10a" message="Doctor data exhausted"/>
+	</flow>
+</mule>
